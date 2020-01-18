@@ -63,7 +63,25 @@ func GetGategoryMsg() {
 
 }
 
-func KeyBoardCategory(db *sql.DB, user string) (tgbotapi.InlineKeyboardMarkup, error) {
+func DeleteCategory(db *sql.DB, user, category string) error {
+	query := fmt.Sprintf("delete from public.%v where %v=%v and %v=%v", pq.QuoteIdentifier("Spending"), pq.QuoteIdentifier("user"), pq.QuoteLiteral(user), pq.QuoteIdentifier("category"), pq.QuoteLiteral(user+"_"+category))
+	fmt.Println(query)
+	_, err := db.Query(query)
+	if err != nil {
+		fmt.Println(query)
+		return err
+	}
+	query = fmt.Sprintf("delete from public.%v where %v=%v and %v=%v", pq.QuoteIdentifier("Category"), pq.QuoteIdentifier("user"), pq.QuoteLiteral(user), pq.QuoteIdentifier("name"), pq.QuoteLiteral(category))
+	fmt.Println(query)
+	_, err = db.Query(query)
+	if err != nil {
+		fmt.Println(query)
+		return err
+	}
+	return nil
+}
+
+func KeyBoardCategory(db *sql.DB, user string, where string) (tgbotapi.InlineKeyboardMarkup, error) {
 	keyboard := tgbotapi.InlineKeyboardMarkup{}
 	cArr, err := GetCategorys(db, user)
 	if err != nil {
@@ -73,7 +91,7 @@ func KeyBoardCategory(db *sql.DB, user string) (tgbotapi.InlineKeyboardMarkup, e
 	for _, v := range cArr {
 		cStringArr = append(cStringArr, v.Name)
 	}
-	keyboard = newKeyboard(cStringArr)
+	keyboard = newKeyboard(cStringArr, where)
 
 	return keyboard, nil
 }

@@ -8,43 +8,17 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/wcharczuk/go-chart"
 	"log"
-	"sync"
+	"strings"
 	"time"
 )
 
 var db *sql.DB
 var app Engine
 
-type AMap struct {
-	m           sync.Mutex
-	spendingMap map[string]Spending
-}
-
-func (a *AMap) Add(user string, s Spending) {
-	a.m.Lock()
-	defer a.m.Unlock()
-	a.spendingMap[user] = s
-}
-
-func (a *AMap) Delete(user string) {
-	a.m.Lock()
-	defer a.m.Unlock()
-	delete(a.spendingMap, user)
-}
-
-func (a *AMap) Get(user string) (Spending, bool) {
-	a.m.Lock()
-	defer a.m.Unlock()
-	r, ok := a.spendingMap[user]
-	return r, ok
-}
-
-var spendingMap AMap
-
 func main() {
 	plot()
 	app.Init()
-	spendingMap.spendingMap = make(map[string]Spending)
+	spendingMap.data = make(map[string]Spending)
 	db, err := GetDBConnection(app.DBURL)
 	if err != nil {
 		log.Fatal(err)
@@ -85,6 +59,11 @@ func main() {
 					}
 				case "newCategory":
 					name := update.Message.CommandArguments()
+					if name == "" {
+						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при добавлении категории, попробуй сделать по инструкции.")
+						bot.Send(msg)
+						continue
+					}
 					c := NewCategory(name, update.Message.From.UserName)
 					err := c.AddToDb(db)
 					if err != nil {
@@ -100,32 +79,60 @@ func main() {
 						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
 						fmt.Println(err)
 					} else {
-						text := "Вот за что вы можете заплатить Ведьмаку:\n"
-						for i, v := range cArr {
-							s := fmt.Sprintf("%v. %v\n", i+1, v.Name)
-							text = text + s
+						if len(cArr) == 0 {
+							text := "Вам не за что платить ведьмаку!\n"
+							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+						} else {
+							text := "Вот за что вы можете заплатить Ведьмаку:\n"
+							for i, v := range cArr {
+								s := fmt.Sprintf("%v. %v\n", i+1, v.Name)
+								text = text + s
+							}
+							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
 						}
-						msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+					}
+
+				case "deleteCategory":
+					k, err := KeyBoardCategory(db, update.Message.From.UserName, deleteCategory)
+					cArr, err := GetCategorys(db, update.Message.From.UserName)
+					if err != nil {
+						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
+						fmt.Println(err)
+					} else {
+						if len(cArr) == 0 {
+							text := "Вам нечего удалять!\n"
+							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+						} else {
+							text := fmt.Sprintf("Выберете какую категорию вы хотите удалить!")
+							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+							msg.ReplyMarkup = k
+						}
 					}
 				case "newSpending":
 					query := update.Message.CommandArguments()
 					fmt.Println(query)
 					value, comment, err := ParseSpending(query)
+					cArr, err := GetCategorys(db, update.Message.From.UserName)
 					if err == nil {
-						k, err := KeyBoardCategory(db, update.Message.From.UserName)
+						k, err := KeyBoardCategory(db, update.Message.From.UserName, newSpending)
 						if err != nil {
 							msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
 							fmt.Println(err)
 						} else {
-							text := fmt.Sprintf("Выбери за что заплатить Ведьмаку!")
-							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
-							msg.ReplyMarkup = k
-							t := time.Now()
-							s := NewSpending(update.Message.From.UserName, "", t.Day(), t.Month(), t.Year(), comment, value)
-							fmt.Printf("From command %v\n", s)
-							spendingMap.Add(update.Message.From.UserName, s)
-							e, ok := spendingMap.Get(update.Message.From.UserName)
-							fmt.Println(e, ok)
+							if len(cArr) == 0 {
+								text := "Вам не за что платить ведьмаку!\n"
+								msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+							} else {
+								text := fmt.Sprintf("Выбери за что заплатить Ведьмаку!")
+								msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+								msg.ReplyMarkup = k
+								t := time.Now()
+								s := NewSpending(update.Message.From.UserName, "", t.Day(), t.Month(), t.Year(), comment, value)
+								fmt.Printf("From command %v\n", s)
+								spendingMap.Add(update.Message.From.UserName, s)
+								e, ok := spendingMap.Get(update.Message.From.UserName)
+								fmt.Println(e, ok)
+							}
 						}
 					} else {
 						text := fmt.Sprintf("Вы не можете заплатить Ведьмаку, по причине: %v", err.Error())
@@ -134,42 +141,83 @@ func main() {
 				case "test":
 					text := fmt.Sprintf("Привет!\nЯ тут!")
 					msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+				case "reportmonth":
+					t := time.Now()
+					plot, sum, err := GetPlotSpendingForMonth(db, update.Message.From.UserName, int(t.Month()), t.Year())
+					if err != nil {
+						text := fmt.Sprintf("Ошибочка!")
+						fmt.Println(text)
+						msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+					} else {
+						text := fmt.Sprintf("За %v.%v вы заплатили Ведьмаку %v!", t.Month(), t.Year(), sum)
+						image := tgbotapi.NewPhotoUpload(update.Message.Chat.ID, plot)
+						newmsg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+						bot.Send(newmsg)
+						bot.Send(image)
+					}
 				default:
 					{
 						fmt.Printf("Unidentified command: %v", command)
-						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Такой команды у меня нет)")
+						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ты втираешь мне какую-то дичь!")
 						msg.ReplyToMessageID = update.Message.MessageID
 					}
 				}
 
 			}
-			/*b:=plot()
-			p:=tgbotapi.NewPhotoUpload(update.Message.Chat.ID,b)
-			bot.Send(p)*/
 			bot.Send(msg)
 		}
 
 		if update.CallbackQuery != nil {
-			fmt.Println(spendingMap)
-			c := update.CallbackQuery.Data
-			s, ok := spendingMap.Get(update.CallbackQuery.From.UserName)
-			if ok {
-				c_id := fmt.Sprintf("%v_%v", update.CallbackQuery.From.UserName, c)
-				s.Category = c_id
-				text := fmt.Sprintf("Вы заплатили Ведьмаку чеканной монетой за %v", c)
+			callback := update.CallbackQuery.Data
+			callbackArr := strings.Split(callback, ":")
+			if len(callbackArr) != 2 {
+				text := fmt.Sprintf("Ты втираешь мне какую-то дичь, %v!", update.CallbackQuery.From.UserName)
 				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
 				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
 					text))
-				s.AddToDb(db)
-				spendingMap.Delete(update.CallbackQuery.From.UserName)
 			} else {
-				text := fmt.Sprintf("Вы не смогли заплатили Ведьмаку чеканной монетой за %v", c)
-				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
-				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
-					text))
-			}
-		}
+				data := callbackArr[1]
+				comand := callbackArr[0]
+				fmt.Printf("Answer for inlinekeyboard comand: %v data: %v\n", comand, data)
 
+				switch comand + ":" {
+				case deleteCategory:
+					err := DeleteCategory(db, update.CallbackQuery.From.UserName, data)
+					if err != nil {
+						fmt.Println(err)
+						text := fmt.Sprintf("Вы не смогли удалить категорию %v, попробуйте еще раз!", data)
+						bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
+						bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+							text))
+					} else {
+						text := fmt.Sprintf("Категория %v удалена!", data)
+						bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
+						bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+							text))
+					}
+
+				case newSpending:
+					s, ok := spendingMap.Get(update.CallbackQuery.From.UserName)
+					if ok {
+						c_id := fmt.Sprintf("%v_%v", update.CallbackQuery.From.UserName, data)
+						s.Category = c_id
+						text := fmt.Sprintf("Вы заплатили Ведьмаку чеканной монетой за %v", data)
+						bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
+						bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+							text))
+						s.AddToDb(db)
+						spendingMap.Delete(update.CallbackQuery.From.UserName)
+					} else {
+						text := fmt.Sprintf("Вы не смогли заплатили Ведьмаку чеканной монетой за %v", data)
+						bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
+						bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
+							text))
+					}
+
+				}
+			}
+
+		}
 	}
 }
 
@@ -184,7 +232,7 @@ func GetDBConnection(url string) (*sql.DB, error) {
 func plot() tgbotapi.FileBytes {
 	graph := chart.PieChart{
 		Title:  "Test",
-		Values: chart.Values{chart.Value{Value: 60.0, Label: "Еда 60%", Style: chart.Style{FillColor: chart.ColorBlue}}, chart.Value{Value: 40.0, Label: "Такси 40%", Style: chart.Style{FillColor: chart.ColorGreen}}},
+		Values: chart.Values{chart.Value{Value: 100.0, Label: "Еда 60%", Style: chart.Style{}}, chart.Value{Value: 200.0, Label: "Такси 40%", Style: chart.Style{}}},
 	}
 
 	buffer := bytes.NewBuffer([]byte{})

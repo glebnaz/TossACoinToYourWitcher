@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"fmt"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/wcharczuk/go-chart"
 	"strconv"
 	"strings"
 	"time"
@@ -69,4 +72,67 @@ func ParseSpending(q string) (float64, string, error) {
 	comment = qArr[1]
 
 	return value, comment, err
+}
+
+func GetSumSpending(db *sql.DB, user string, category string, month, year int) (float64, error) {
+	var sum float64
+	q := fmt.Sprintf(`select SUM(%v) from public.%v where %v=%v and %v=%v and %v=%v and %v=%v`,
+		pq.QuoteIdentifier("value"), pq.QuoteIdentifier("Spending"), pq.QuoteIdentifier("user"), pq.QuoteLiteral(user), pq.QuoteIdentifier("category"), pq.QuoteLiteral(category), pq.QuoteIdentifier("year"), year, pq.QuoteIdentifier("month"), month)
+	result, err := db.Query(q)
+	if err != nil {
+		return sum, err
+	}
+	for result.Next() {
+		err = result.Scan(&sum)
+		if err != nil {
+			if err.Error() == `sql: Scan error on column index 0, name "sum": converting NULL to float64 is unsupported` {
+				sum = 0.0
+				return sum, nil
+			}
+			return sum, err
+		}
+	}
+	return sum, nil
+}
+
+func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi.FileBytes, float64, error) {
+	var image tgbotapi.FileBytes
+	var sums []chart.Value
+	var allSum float64
+	cArr, err := GetCategorys(db, user)
+	if err != nil {
+		return image, 0.0, err
+	}
+	if len(cArr) == 0 {
+		return image, 0.0, errors.New("Вам не за что платить Ведьмаку!")
+	}
+	for _, category := range cArr {
+		sum, err := GetSumSpending(db, user, category.Id, month, year)
+		allSum = allSum + sum
+		if err != nil {
+			fmt.Println(err)
+			return image, 0.0, err
+		}
+		var v chart.Value
+		strLabel := fmt.Sprintf("%v %v₽", category.Name, sum)
+		v.Label = strLabel
+		v.Value = sum
+		sums = append(sums, v)
+	}
+
+	graph := chart.PieChart{
+		Title:  "Траты",
+		Values: sums,
+	}
+
+	buffer := bytes.NewBuffer([]byte{})
+	err = graph.Render(chart.PNG, buffer)
+	if err != nil {
+		fmt.Printf("Render %v", err)
+		return image, 0.0, err
+	}
+
+	image = tgbotapi.FileBytes{Name: "chart.png", Bytes: buffer.Bytes()}
+
+	return image, allSum, nil
 }
