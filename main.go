@@ -15,6 +15,27 @@ import (
 var db *sql.DB
 var app Engine
 
+const helpmsg = `
+Для того, что бы начать пользоваться ботом пришлите команду **/start**
+
+Команды:
+
+ **/newcat** - создает новую категорию расходов
+*Пример:* 
+/newcat Еда
+
+**/newspnd** - создает новую трату. Слева сумма, справа комент к сумме. 
+*Пример:* 
+/newspnd 200,сникерс (запятая обязательно, даже если нет комента.) 
+
+
+**/getcat** - вернет список твоих категорий 
+
+**/reportmonth** - вернет картиночку с тратами за этот месяц 
+
+**/deletecat** - удалить категорию расходов 
+`
+
 func main() {
 	plot()
 	app.Init()
@@ -48,7 +69,7 @@ func main() {
 				fmt.Printf("Command from: %v\n   Command: %v\n", update.Message.Chat.UserName, command)
 
 				switch command {
-				case "signup":
+				case "start":
 					user := NewUser(update.Message.Chat.ID, update.Message.Chat.UserName)
 					err := user.AddToDb(db)
 					if err != nil {
@@ -57,7 +78,7 @@ func main() {
 					} else {
 						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Подписочка оформлена!")
 					}
-				case "newCategory":
+				case "newcat":
 					name := update.Message.CommandArguments()
 					if name == "" {
 						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при добавлении категории, попробуй сделать по инструкции.")
@@ -73,7 +94,7 @@ func main() {
 						t := fmt.Sprintf("Теперь ты можешь платить ведьмаку за %v", name)
 						msg = tgbotapi.NewMessage(update.Message.Chat.ID, t)
 					}
-				case "getCategory":
+				case "getcat":
 					cArr, err := GetCategorys(db, update.Message.From.UserName)
 					if err != nil {
 						msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
@@ -92,7 +113,7 @@ func main() {
 						}
 					}
 
-				case "deleteCategory":
+				case "deletecat":
 					k, err := KeyBoardCategory(db, update.Message.From.UserName, deleteCategory)
 					cArr, err := GetCategorys(db, update.Message.From.UserName)
 					if err != nil {
@@ -108,7 +129,7 @@ func main() {
 							msg.ReplyMarkup = k
 						}
 					}
-				case "newSpending":
+				case "newspnd":
 					query := update.Message.CommandArguments()
 					fmt.Println(query)
 					value, comment, err := ParseSpending(query)
@@ -155,6 +176,9 @@ func main() {
 						bot.Send(newmsg)
 						bot.Send(image)
 					}
+				case "help":
+					msg = tgbotapi.NewMessage(update.Message.Chat.ID, helpmsg)
+					msg.ParseMode = "markdown"
 				default:
 					{
 						fmt.Printf("Unidentified command: %v", command)
