@@ -1,13 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	_ "github.com/lib/pq"
-	"github.com/wcharczuk/go-chart"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -37,7 +36,6 @@ const helpmsg = `
 `
 
 func main() {
-	plot()
 	app.Init()
 	spendingMap.data = make(map[string]Spending)
 	db, err := GetDBConnection(app.DBURL)
@@ -131,7 +129,6 @@ func main() {
 					}
 				case "newspnd":
 					query := update.Message.CommandArguments()
-					fmt.Println(query)
 					value, comment, err := ParseSpending(query)
 					cArr, err := GetCategorys(db, update.Message.From.UserName)
 					if err == nil {
@@ -163,14 +160,28 @@ func main() {
 					text := fmt.Sprintf("Привет!\nЯ тут!")
 					msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
 				case "reportmonth":
+					q := update.Message.CommandArguments()
+					argArr := strings.Split(q, ".")
 					t := time.Now()
-					plot, sum, err := GetPlotSpendingForMonth(db, update.Message.From.UserName, int(t.Month()), t.Year())
+					if len(argArr) == 2 {
+						year, err := strconv.Atoi(argArr[1])
+						if err != nil {
+							text := fmt.Sprintf("Ошибка при обработке даты!")
+							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+						}
+						mounth, err := strconv.Atoi(argArr[0])
+						if err != nil {
+							text := fmt.Sprintf("Ошибка при обработке даты!")
+							msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
+						}
+						t = time.Date(year, time.Month(mounth), 1, 1, 1, 1, 1, t.Location())
+						fmt.Println(t)
+					}
+					plot, text, err := GetPlotSpendingForMonth(db, update.Message.From.UserName, int(t.Month()), t.Year())
 					if err != nil {
 						text := fmt.Sprintf("Ошибочка!")
-						fmt.Println(text)
 						msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
 					} else {
-						text := fmt.Sprintf("За %v.%v вы заплатили Ведьмаку %v!", t.Month(), t.Year(), sum)
 						image := tgbotapi.NewPhotoUpload(update.Message.Chat.ID, plot)
 						newmsg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 						bot.Send(newmsg)
@@ -251,20 +262,4 @@ func GetDBConnection(url string) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
-}
-
-func plot() tgbotapi.FileBytes {
-	graph := chart.PieChart{
-		Title:  "Test",
-		Values: chart.Values{chart.Value{Value: 100.0, Label: "Еда 60%", Style: chart.Style{}}, chart.Value{Value: 200.0, Label: "Такси 40%", Style: chart.Style{}}},
-	}
-
-	buffer := bytes.NewBuffer([]byte{})
-	err := graph.Render(chart.PNG, buffer)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	image := tgbotapi.FileBytes{Name: "chart.png", Bytes: buffer.Bytes()}
-	return image
 }

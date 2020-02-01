@@ -95,30 +95,37 @@ func GetSumSpending(db *sql.DB, user string, category string, month, year int) (
 	return sum, nil
 }
 
-func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi.FileBytes, float64, error) {
+func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi.FileBytes, string, error) {
 	var image tgbotapi.FileBytes
 	var sums []chart.Value
 	var allSum float64
+	var msg string
+	msg = fmt.Sprintf("За %v.%v вы заплатили Ведьмаку:\n", month, year)
 	cArr, err := GetCategorys(db, user)
 	if err != nil {
-		return image, 0.0, err
+		return image, msg, err
 	}
 	if len(cArr) == 0 {
-		return image, 0.0, errors.New("Вам не за что платить Ведьмаку!")
+		return image, msg, errors.New("Вам не за что платить Ведьмаку!")
 	}
 	for _, category := range cArr {
 		sum, err := GetSumSpending(db, user, category.Id, month, year)
 		allSum = allSum + sum
 		if err != nil {
 			fmt.Println(err)
-			return image, 0.0, err
+			return image, msg, err
 		}
 		var v chart.Value
-		strLabel := fmt.Sprintf("%v %v₽", category.Name, sum)
+		msgCat := fmt.Sprintf("%v - %v₽\n", category.Name, sum)
+		msg = msg + msgCat
+		strLabel := msgCat
 		v.Label = strLabel
 		v.Value = sum
 		sums = append(sums, v)
 	}
+
+	allSumsMsg := fmt.Sprintf("Всего вы потратили: %v .\n", allSum)
+	msg = msg + allSumsMsg
 
 	graph := chart.PieChart{
 		Title:  "Траты",
@@ -129,10 +136,10 @@ func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi
 	err = graph.Render(chart.PNG, buffer)
 	if err != nil {
 		fmt.Printf("Render %v", err)
-		return image, 0.0, err
+		return image, msg, err
 	}
 
 	image = tgbotapi.FileBytes{Name: "chart.png", Bytes: buffer.Bytes()}
 
-	return image, allSum, nil
+	return image, msg, nil
 }

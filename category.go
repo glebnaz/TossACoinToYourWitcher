@@ -38,7 +38,6 @@ func GetCategorys(db *sql.DB, user string) ([]Category, error) {
 	var cArr []Category
 
 	query := fmt.Sprintf(`select * from public.%v where %v = %v`, pq.QuoteIdentifier("Category"), pq.QuoteIdentifier("user"), pq.QuoteLiteral(user))
-	fmt.Println(query)
 	result, err := db.Query(query)
 	if err != nil {
 		fmt.Printf("Error: %v", err)
@@ -48,7 +47,6 @@ func GetCategorys(db *sql.DB, user string) ([]Category, error) {
 	for result.Next() {
 		var c Category
 		err := result.Scan(&c.Id, &c.Name, &c.User)
-		fmt.Println(c)
 		if err != nil {
 			fmt.Println(err)
 			continue
@@ -57,10 +55,6 @@ func GetCategorys(db *sql.DB, user string) ([]Category, error) {
 	}
 
 	return cArr, err
-}
-
-func GetGategoryMsg() {
-
 }
 
 func DeleteCategory(db *sql.DB, user, category string) error {
