@@ -1,0 +1,13 @@
+version: '3'
+services:
+  toss:
+    build: .
+    container_name: "toss"
+    restart: always
+
+  #postgres:
+   # image: "postgres:11"
+   # volumes:
+    #  - "/Library/Application Support/Postgres/var-10"
+    #ports:
+     # - "5431:5432"
