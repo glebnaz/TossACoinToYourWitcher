@@ -12,28 +12,8 @@ import (
 )
 
 var db *sql.DB
-var app Engine
-
-const helpmsg = `
-Для того, что бы начать пользоваться ботом пришлите команду **/start**
-
-Команды:
-
- **/newcat** - создает новую категорию расходов
-*Пример:* 
-/newcat Еда
-
-**/newspnd** - создает новую трату. Слева сумма, справа комент к сумме. 
-*Пример:* 
-/newspnd 200,сникерс (запятая обязательно, даже если нет комента.) 
-
-
-**/getcat** - вернет список твоих категорий 
-
-**/reportmonth** - вернет картиночку с тратами за этот месяц 
-
-**/deletecat** - удалить категорию расходов 
-`
+var app Config
+var engine Engine
 
 func main() {
 	app.Init()
@@ -254,12 +234,4 @@ func main() {
 
 		}
 	}
-}
-
-func GetDBConnection(url string) (*sql.DB, error) {
-	db, err := sql.Open("postgres", url)
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
 }
