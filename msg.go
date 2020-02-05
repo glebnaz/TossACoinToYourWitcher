@@ -9,6 +9,7 @@ import (
 )
 
 func CommandHandler(update tgbotapi.Update) {
+	bot := engine.Bot
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 	if update.Message.Command() != "" {
 
@@ -18,7 +19,7 @@ func CommandHandler(update tgbotapi.Update) {
 		switch command {
 		case "start":
 			user := NewUser(update.Message.Chat.ID, update.Message.Chat.UserName)
-			err := user.AddToDb(db)
+			err := user.AddToDb(engine.DB)
 			if err != nil {
 				fmt.Println(err)
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при регистрации")
@@ -33,7 +34,7 @@ func CommandHandler(update tgbotapi.Update) {
 				return
 			}
 			c := NewCategory(name, update.Message.From.UserName)
-			err := c.AddToDb(db)
+			err := c.AddToDb(engine.DB)
 			if err != nil {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при добавлении категории, попробуй сделать по инструкции.")
 				fmt.Println(err)
@@ -42,7 +43,7 @@ func CommandHandler(update tgbotapi.Update) {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, t)
 			}
 		case "getcat":
-			cArr, err := GetCategorys(db, update.Message.From.UserName)
+			cArr, err := GetCategorys(engine.DB, update.Message.From.UserName)
 			if err != nil {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
 				fmt.Println(err)
@@ -61,8 +62,8 @@ func CommandHandler(update tgbotapi.Update) {
 			}
 
 		case "deletecat":
-			k, err := KeyBoardCategory(db, update.Message.From.UserName, deleteCategory)
-			cArr, err := GetCategorys(db, update.Message.From.UserName)
+			k, err := KeyBoardCategory(engine.DB, update.Message.From.UserName, deleteCategory)
+			cArr, err := GetCategorys(engine.DB, update.Message.From.UserName)
 			if err != nil {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
 				fmt.Println(err)
@@ -79,9 +80,9 @@ func CommandHandler(update tgbotapi.Update) {
 		case "newspnd":
 			query := update.Message.CommandArguments()
 			value, comment, err := ParseSpending(query)
-			cArr, err := GetCategorys(db, update.Message.From.UserName)
+			cArr, err := GetCategorys(engine.DB, update.Message.From.UserName)
 			if err == nil {
-				k, err := KeyBoardCategory(db, update.Message.From.UserName, newSpending)
+				k, err := KeyBoardCategory(engine.DB, update.Message.From.UserName, newSpending)
 				if err != nil {
 					msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
 					fmt.Println(err)
@@ -126,7 +127,7 @@ func CommandHandler(update tgbotapi.Update) {
 				t = time.Date(year, time.Month(mounth), 1, 1, 1, 1, 1, t.Location())
 				fmt.Println(t)
 			}
-			plot, text, err := GetPlotSpendingForMonth(db, update.Message.From.UserName, int(t.Month()), t.Year())
+			plot, text, err := GetPlotSpendingForMonth(engine.DB, update.Message.From.UserName, int(t.Month()), t.Year())
 			if err != nil {
 				text := fmt.Sprintf("Ошибочка!")
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
@@ -151,7 +152,8 @@ func CommandHandler(update tgbotapi.Update) {
 	bot.Send(msg)
 }
 
-func CallBackQuery(update tgbotapi.Update) {
+func CallBackQueryHandler(update tgbotapi.Update) {
+	bot := engine.Bot
 	callback := update.CallbackQuery.Data
 	callbackArr := strings.Split(callback, ":")
 	if len(callbackArr) != 2 {
@@ -166,7 +168,7 @@ func CallBackQuery(update tgbotapi.Update) {
 
 		switch comand + ":" {
 		case deleteCategory:
-			err := DeleteCategory(db, update.CallbackQuery.From.UserName, data)
+			err := DeleteCategory(engine.DB, update.CallbackQuery.From.UserName, data)
 			if err != nil {
 				fmt.Println(err)
 				text := fmt.Sprintf("Вы не смогли удалить категорию %v, попробуйте еще раз!", data)
@@ -189,7 +191,7 @@ func CallBackQuery(update tgbotapi.Update) {
 				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
 				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
 					text))
-				s.AddToDb(db)
+				s.AddToDb(engine.DB)
 				spendingMap.Delete(update.CallbackQuery.From.UserName)
 			} else {
 				text := fmt.Sprintf("Вы не смогли заплатили Ведьмаку чеканной монетой за %v", data)
