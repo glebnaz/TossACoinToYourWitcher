@@ -130,6 +130,8 @@ func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi
 	graph := chart.PieChart{
 		Title:  "Траты",
 		Values: sums,
+		Height: 1000,
+		Width:  1000,
 	}
 
 	buffer := bytes.NewBuffer([]byte{})

@@ -1,27 +1,41 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
-	"log"
-	"os"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-//Engine структура для хранения конфигов
 type Engine struct {
-	TokenTg string
-	DBURL   string
+	DB  *sql.DB
+	Bot *tgbotapi.BotAPI
 }
 
-//Init инициализирует конфиг
-func (e *Engine) Init() {
-	fmt.Println("Toss a Coin")
-	e.TokenTg = os.Getenv("TokenTg")
-	if len(e.TokenTg) < 0 {
-		log.Fatal("Нет токена для телеграма")
+func (e *Engine) Init() error {
+	bot, err := tgbotapi.NewBotAPI(app.TokenTg)
+	if err != nil {
+		return err
 	}
-	e.DBURL = os.Getenv("DB_ADDR")
-	if len(e.DBURL) < 0 {
-		log.Fatal("Нет конфига  для базы")
+
+	bot.Debug = false
+
+	e.Bot = bot
+
+	fmt.Printf("Authorized on account %s\n", bot.Self.UserName)
+
+	db, err := GetDBConnection(app.DBURL)
+	if err != nil {
+		return err
 	}
-	fmt.Println("Best Start")
+	e.DB = db
+
+	return nil
+}
+
+func GetDBConnection(url string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", url)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
