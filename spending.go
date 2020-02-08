@@ -121,6 +121,7 @@ func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi
 		strLabel := msgCat
 		v.Label = strLabel
 		v.Value = sum
+		v.Style.FontSize = 22
 		sums = append(sums, v)
 	}
 
@@ -130,9 +131,11 @@ func GetPlotSpendingForMonth(db *sql.DB, user string, month, year int) (tgbotapi
 	graph := chart.PieChart{
 		Title:  "Траты",
 		Values: sums,
-		Height: 1000,
-		Width:  1000,
+		Height: 3000,
+		Width:  3000,
 	}
+
+	graph.TitleStyle.Show = true
 
 	buffer := bytes.NewBuffer([]byte{})
 	err = graph.Render(chart.PNG, buffer)
