@@ -17,7 +17,7 @@ func CommandHandler(update tgbotapi.Update) {
 		fmt.Printf("Command from: %v\n   Command: %v\n", update.Message.Chat.UserName, command)
 
 		switch command {
-		case "start":
+		case startCommand:
 			user := NewUser(update.Message.Chat.ID, update.Message.Chat.UserName)
 			err := user.AddToDb(engine.DB)
 			if err != nil {
@@ -26,7 +26,7 @@ func CommandHandler(update tgbotapi.Update) {
 			} else {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Подписочка оформлена!")
 			}
-		case "newcat":
+		case newCategory:
 			name := update.Message.CommandArguments()
 			if name == "" {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка при добавлении категории, попробуй сделать по инструкции.")
@@ -42,7 +42,7 @@ func CommandHandler(update tgbotapi.Update) {
 				t := fmt.Sprintf("Теперь ты можешь платить ведьмаку за %v", name)
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, t)
 			}
-		case "getcat":
+		case getCategoryCommand:
 			cArr, err := GetCategorys(engine.DB, update.Message.From.UserName)
 			if err != nil {
 				msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка поиска категории")
@@ -61,7 +61,7 @@ func CommandHandler(update tgbotapi.Update) {
 				}
 			}
 
-		case "deletecat":
+		case deletecat:
 			k, err := KeyBoardCategory(engine.DB, update.Message.From.UserName, deleteCategory)
 			cArr, err := GetCategorys(engine.DB, update.Message.From.UserName)
 			if err != nil {
@@ -77,7 +77,7 @@ func CommandHandler(update tgbotapi.Update) {
 					msg.ReplyMarkup = k
 				}
 			}
-		case "newspnd":
+		case newSpendingCommand:
 			query := update.Message.CommandArguments()
 			value, comment, err := ParseSpending(query)
 			cArr, err := GetCategorys(engine.DB, update.Message.From.UserName)
@@ -97,8 +97,8 @@ func CommandHandler(update tgbotapi.Update) {
 						t := time.Now()
 						s := NewSpending(update.Message.From.UserName, "", t.Day(), t.Month(), t.Year(), comment, value)
 						fmt.Printf("From command %v\n", s)
-						spendingMap.Add(update.Message.From.UserName, s)
-						e, ok := spendingMap.Get(update.Message.From.UserName)
+						spendingCash.Add(update.Message.From.UserName, s)
+						e, ok := spendingCash.Get(update.Message.From.UserName)
 						fmt.Println(e, ok)
 					}
 				}
@@ -109,7 +109,7 @@ func CommandHandler(update tgbotapi.Update) {
 		case "test":
 			text := fmt.Sprintf("Привет!\nЯ тут!")
 			msg = tgbotapi.NewMessage(update.Message.Chat.ID, text)
-		case "reportmonth":
+		case report:
 			q := update.Message.CommandArguments()
 			argArr := strings.Split(q, ".")
 			t := time.Now()
@@ -137,7 +137,7 @@ func CommandHandler(update tgbotapi.Update) {
 				bot.Send(newmsg)
 				bot.Send(image)
 			}
-		case "help":
+		case helpCommand:
 			msg = tgbotapi.NewMessage(update.Message.Chat.ID, helpmsg)
 			msg.ParseMode = "markdown"
 		default:
@@ -183,7 +183,7 @@ func CallBackQueryHandler(update tgbotapi.Update) {
 			}
 
 		case newSpending:
-			s, ok := spendingMap.Get(update.CallbackQuery.From.UserName)
+			s, ok := spendingCash.Get(update.CallbackQuery.From.UserName)
 			if ok {
 				c_id := fmt.Sprintf("%v_%v", update.CallbackQuery.From.UserName, data)
 				s.Category = c_id
@@ -192,7 +192,7 @@ func CallBackQueryHandler(update tgbotapi.Update) {
 				bot.Send(tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID,
 					text))
 				s.AddToDb(engine.DB)
-				spendingMap.Delete(update.CallbackQuery.From.UserName)
+				spendingCash.Delete(update.CallbackQuery.From.UserName)
 			} else {
 				text := fmt.Sprintf("Вы не смогли заплатили Ведьмаку чеканной монетой за %v", data)
 				bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))

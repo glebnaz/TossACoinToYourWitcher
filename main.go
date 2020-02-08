@@ -12,7 +12,7 @@ var engine Engine
 func main() {
 	app.Init()
 	err := engine.Init()
-	spendingMap.data = make(map[string]Spending)
+	spendingCash.data = make(map[string]Spending)
 	if err != nil {
 		log.Fatal(err)
 	}

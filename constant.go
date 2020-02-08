@@ -24,8 +24,9 @@ const helpmsg = `
 const (
 	startCommand       = "start"
 	newCategory        = "newcat"
-	deletecat          = "deletecategory"
+	getCategoryCommand = "getcat"
+	deletecat          = "deletecat"
 	newSpendingCommand = "newspnd"
-	report             = "reportMonth"
+	report             = "reportmonth"
 	helpCommand        = "help"
 )
